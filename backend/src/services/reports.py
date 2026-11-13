@@ -16,7 +16,14 @@ def export(db,id):
  report=db.get(PublishedReport,id)
  if not report:raise HTTPException(404,"报告不存在")
  result=require_completed(db,report.run_id).result
- buf=io.StringIO();writer=csv.DictWriter(buf,["method","zone","scale","structure","intensity"]);writer.writeheader()
+ zero_zones={o["zone"] for o in result["observations"] if o["water_before"]==0 or o["water_after"]==0}
+ fields=["method","zone","scale","structure","intensity"]+(["water_before","water_after","zero_note"] if zero_zones else [])
+ buf=io.StringIO();writer=csv.DictWriter(buf,fields);writer.writeheader()
+ notes={"shapley":"零用水按0参与逐区闭合","lmdi":"零用水取对数均值零极限，不添加epsilon"}
  for method in ("shapley","lmdi"):
-  for row in result[method]["zones"]:writer.writerow({"method":method,**{k:safe_cell(v) for k,v in row.items()}})
+  for row in result[method]["zones"]:
+   if not zero_zones:
+    writer.writerow({"method":method,**{k:safe_cell(v) for k,v in row.items()}});continue
+   obs=next(o for o in result["observations"] if o["zone"]==row["zone"])
+   writer.writerow({"method":method,**{k:safe_cell(v) for k,v in row.items()},"water_before":obs["water_before"],"water_after":obs["water_after"],"zero_note":notes[method] if row["zone"] in zero_zones else ""})
  return "\ufeff"+buf.getvalue()

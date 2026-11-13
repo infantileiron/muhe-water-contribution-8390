@@ -1,13 +1,20 @@
 import math
 def prepare(rows,before,after):
  def period(name):
-  selected=[r for r in rows if r["period"]==name]
+  selected=[r for r in rows if r.get("period")==name]
   if not selected:raise ValueError("月份没有观测："+name)
-  zones=[r["zone"] for r in selected]
-  if len(zones)!=len(set(zones)):raise ValueError("月份内分区重复")
+  zones=[];data={}
   for row in selected:
-   if any(not math.isfinite(row[k]) or row[k]<=0 for k in ("scale","water")):raise ValueError("规模与用水必须为有限正值；零值不能用epsilon替换")
-  return {r["zone"]:r for r in selected}
+   for key in ("zone","period","scale","water"):
+    if key not in row or row[key] is None:raise ValueError("存在缺测字段："+key+"；缺测不能用零值代替")
+   zone=row["zone"]
+   if zone in data:raise ValueError("月份内分区重复")
+   try:scale=float(row["scale"]);water=float(row["water"])
+   except (TypeError,ValueError):raise ValueError("规模与用水必须是数值")
+   if not math.isfinite(scale) or scale<=0:raise ValueError("规模必须为有限正值，零值不能用epsilon替换")
+   if not math.isfinite(water) or water<0:raise ValueError("用水必须为有限非负值；真实零值可用，缺测和负值拒绝")
+   data[zone]={"zone":zone,"period":row["period"],"scale":scale,"water":water};zones.append(zone)
+  return data
  a=period(before);b=period(after)
  if set(a)!=set(b):raise ValueError("两期分区不一致，禁止补零或静默丢弃分区")
  zones=sorted(a)
